@@ -6,6 +6,7 @@ http://dx.doi.org/10.1016/j.ecosta.2017.01.006
 created by Florian Roessler
 """
 
+import click
 import numpy as np
 import pandas as pd
 import scipy.stats as sc
@@ -90,15 +91,15 @@ def get_weights(weight_type, L):
     return w
 
 
-def gsl_div(original, output, weights, b=5, L=6, min_per=1, max_per=99,
-            state_space=None):
+def gsl_div(original, model, weights='add-progressive',
+            b=5, L=6, min_per=1, max_per=99, state_space=None):
     """Calculate the gsl_div between model and reference data.
 
     Parameters
     ----------
     original: np.array, shape(1, len(time-series))
         original reference data
-    output: np.array, shape(len(reps), len(time-series))
+    model: np.array, shape(len(reps), len(time-series))
         array of model results (replicates)
     weights: str ('add-progressive', 'uniform', )
         Specify the weighting to be applied to different block
@@ -120,7 +121,7 @@ def gsl_div(original, output, weights, b=5, L=6, min_per=1, max_per=99,
     Implementation of the following paper:
     http://dx.doi.org/10.1016/j.ecosta.2017.01.006
     """
-    all_ts = np.concatenate([original, output])
+    all_ts = np.concatenate([original, model])
     # determine the time series length
     T = original.shape[1]
     if T < L:
@@ -167,3 +168,44 @@ def gsl_div(original, output, weights, b=5, L=6, min_per=1, max_per=99,
     weighted_correction = (w * np.array(correction)).sum()
 
     return weighted_res + weighted_correction
+
+
+@click.command(context_settings=dict(max_content_width=120))
+@click.option('--original', default='original.csv',
+              help='Reference time series.',
+              show_default=True)
+@click.option('--model', default='model.csv',
+              help='Model output time-series.',
+              show_default=True)
+@click.option('--weights', default='add-progressive',
+              type=click.Choice(['add-progressive', 'uniform']),
+              help='Which type of weighting to use.',
+              show_default=True)
+@click.option('--b', default=5,
+              help='Number of symbols to use during symbolisation.',
+              show_default=True)
+@click.option('--l', default=6,
+              help='Maximum word length to be used.',
+              show_default=True)
+@click.option('--min_per', default=1,
+              type=click.IntRange(0, 100),
+              help='percentile to be used as minimum cut-off.',
+              show_default=True)
+@click.option('--max_per', default=99,
+              type=click.IntRange(0, 100),
+              help='percentile to be used as maximum cut-off.',
+              show_default=True)
+@click.option('--state_space', default=None,
+              help='State space boundaries. Format example: "(0, 1)"',
+              show_default=True)
+def main(original, model, weights, b, l, min_per, max_per, state_space):
+    original_ts = pd.read_csv(original).values.T
+    model_ts = pd.read_csv(model).values.T
+    res = gsl_div(original_ts, model_ts, weights=weights, b=b, L=l, min_per=min_per,
+                  max_per=max_per, state_space=eval(state_space))
+    print(res)
+    return res
+
+
+if __name__ == '__main__':
+    main()
