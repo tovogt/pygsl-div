@@ -3,7 +3,7 @@ Implementation of "An information theoretic criterion for empirical
 validation of simulation models" by Francesco Lamperti.
 http://dx.doi.org/10.1016/j.ecosta.2017.01.006
 
-created by Florian Roessler
+created by Florian Roessler and Lies Boelen
 """
 
 import click
