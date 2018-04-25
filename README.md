@@ -8,7 +8,7 @@ Python implementation of GSL-div as described in "An information theoretic crite
 
 `python pygsl_div.py --help` - for help and input description
 
-Paper example 1: `python pygsl_div.py --b 3 --l 3 --min_per 0 --max_per 100 --state_space "(0, 1)"`
+Paper example 1: `python pygsl_div.py --original example/original.csv --model example/model.csv --b 3 --l 3 --min_per 0 --max_per 100 --state_space "(0, 1)"`
 
 #### In any script by importing it as a module
 

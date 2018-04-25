@@ -172,12 +172,10 @@ def gsl_div(original, model, weights='add-progressive',
 
 
 @click.command(context_settings=dict(max_content_width=120))
-@click.option('--original', default='original.csv',
-              help='Reference time series.',
-              show_default=True)
-@click.option('--model', default='model.csv',
-              help='Model output time-series.',
-              show_default=True)
+@click.option('--original', required=True,
+              help='Path to file with reference time series.')
+@click.option('--model', required=True,
+              help='Path to file with model output time-series.')
 @click.option('--weights', default='add-progressive',
               type=click.Choice(['add-progressive', 'uniform']),
               help='Which type of weighting to use.',
