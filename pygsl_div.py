@@ -85,9 +85,9 @@ def get_weights(weight_type, L):
 
     """
     if weight_type == 'uniform':
-        w = np.array([1 / L] * L)
+        w = np.array([1. / L] * L)
     elif weight_type == 'add-progressive':
-        w = np.array([2 / (L * (L + 1))]*L).cumsum()
+        w = np.array([2. / (L * (L + 1))]*L).cumsum()
     return w
 
 
@@ -138,7 +138,7 @@ def gsl_div(original, model, weights='add-progressive',
         # way you get a 10x speed up
         fs = pd.DataFrame((ts.stack().reset_index()
                            .groupby([0, "level_0"]).count() /
-                           len(ts.T)).unstack().values)
+                           len(ts.T)).unstack().values.astype(float))
 
         # replace NaN with 0 so that log does not complain later
         fs = fs.replace(np.nan, 0)
@@ -147,10 +147,11 @@ def gsl_div(original, model, weights='add-progressive',
         # calculate the distances between the different time-series
         # give a particluar word size
         M = (fs.iloc[:, 1:].values +
-             np.expand_dims(fs.iloc[:, 0].values, 1)) / 2
+             np.expand_dims(fs.iloc[:, 0].values, 1)) / 2.
         temp = (2 * sc.entropy(M, base=base) -
                 sc.entropy(fs.values[:, 1:], base=base))
-        raw_divergence.append(reduce(np.add, temp) / (len(fs.columns) - 1))
+        raw_divergence.append(reduce(np.add, temp) /
+                              float((len(fs.columns) - 1)))
         cardinality_of_m = fs.apply(lambda x: reduce(np.logical_or, x),
                                     axis=1).sum()
         # if there is only one replicate this has to be handled differently
@@ -160,8 +161,8 @@ def gsl_div(original, model, weights='add-progressive',
             cardinality_of_reps = fs.iloc[:, 1:].apply(
                 lambda x: reduce(np.logical_or, x), axis=1).sum()
         # calculate correction based on formula 9 line 2 in paper
-        correction.append(2*((cardinality_of_m - 1) / (4 * T)) -
-                          ((cardinality_of_reps - 1) / (2 * T)))
+        correction.append(2*((cardinality_of_m - 1) / (4. * T)) -
+                          ((cardinality_of_reps - 1) / (2. * T)))
 
     w = get_weights(weight_type=weights, L=L)
     weighted_res = (w * np.array(raw_divergence)).sum(axis=0)
@@ -195,14 +196,15 @@ def gsl_div(original, model, weights='add-progressive',
               type=click.IntRange(0, 100),
               help='percentile to be used as maximum cut-off.',
               show_default=True)
-@click.option('--state_space', default=None,
+@click.option('--state_space', default="None",
               help='State space boundaries. Format example: "(0, 1)"',
               show_default=True)
 def main(original, model, weights, b, l, min_per, max_per, state_space):
     original_ts = pd.read_csv(original).values.T
     model_ts = pd.read_csv(model).values.T
-    res = gsl_div(original_ts, model_ts, weights=weights, b=b, L=l, min_per=min_per,
-                  max_per=max_per, state_space=eval(state_space))
+    res = gsl_div(original_ts, model_ts, weights=weights, b=b, L=l,
+                  min_per=min_per, max_per=max_per,
+                  state_space=eval(state_space))
     print(res)
     return res
 
