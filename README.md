@@ -1,6 +1,14 @@
 # pygsl-div
 Python implementation of GSL-div as described in "An information theoretic criterion for empirical validation of simulation models" by Francesco Lamperti. http://dx.doi.org/10.1016/j.ecosta.2017.01.006
 
+Supports Python 2 and Python 3
+
+### Installation
+
+- clone repo: `git clone https://github.com/sandtable/pygsl-div.git`
+- create a new environement via your favourite virtualenv e.g. `conda create --name pygsl_div python=3.6`
+- install requirements `conda install --file=requirements.txt` or `pip install -r requirements.txt`
+
 ### How To
 #### CLI using csv files that contain the time-series
 
