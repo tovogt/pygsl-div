@@ -53,6 +53,11 @@ def get_symbolised_ts(ts, b, L, min_per=1, max_per=99, state_space=None):
         cuts = np.linspace(min_p, max_p, b+1)
     else:
         cuts = np.linspace(state_space[0], state_space[1], b+1)
+
+    # make sure that no values fall outside the bins:
+    cuts[0] = -np.inf
+    cuts[-1] = np.inf
+
     # now we map the time series to the bins in the symbol space
     symbolised_ts = np.array([np.digitize(t, cuts) for t in ts])
     # to be able to deal with "words" or combination of symbols it is easier
