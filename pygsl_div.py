@@ -37,8 +37,7 @@ def get_symbolised_ts(ts, b, L, min_per=1, max_per=99, state_space=None):
 
     Return
     ------
-    a list of dataframes that contain symbol timeseries for
-    combinations of b and L
+    a list of arrays that contain symbol timeseries for combinations of b and L
 
     Notes
     -----
@@ -58,22 +57,18 @@ def get_symbolised_ts(ts, b, L, min_per=1, max_per=99, state_space=None):
     cuts[0] = -np.inf
     cuts[-1] = np.inf
 
-    # now we map the time series to the bins in the symbol space
-    symbolised_ts = np.array([np.digitize(t, cuts) for t in ts])
-    # to be able to deal with "words" or combination of symbols it is easier
-    # to deal with them as strings in pandas dfs
-    # TODO: Maybe better way of doing this
-    sym_str = pd.DataFrame(symbolised_ts).astype(str)
-    # collect all symbol dataframes based on block size given
-    all_dfs = []
-    all_dfs.append(sym_str)
-    for l in range(1, L):
-        df = pd.DataFrame()
-        for x in range(int(len(sym_str.columns))-l):
-            df = pd.concat([df, sym_str.loc[:, x:x+l].apply("".join, axis=1)],
-                           axis=1)
-        all_dfs.append(df)
-    return all_dfs
+    # now we map the time series to the bins in the symbol space, ranging from 0 to b-1
+    symbolised_ts = np.array([np.digitize(t, cuts) for t in ts]) - 1
+
+    # map words to numbers from 0 to b**l - 1
+    return [
+        np.einsum(
+            "ijk,k->ij",
+            np.lib.stride_tricks.sliding_window_view(symbolised_ts, l, axis=1),
+            b**np.arange(l),
+        )
+        for l in range(1, L + 1)
+    ]
 
 
 def get_weights(weight_type, L):
@@ -90,9 +85,9 @@ def get_weights(weight_type, L):
 
     """
     if weight_type == 'uniform':
-        w = np.array([1. / L] * L)
+        w = np.full(L, 1. / L)
     elif weight_type == 'add-progressive':
-        w = np.array([2. / (L * (L + 1))]*L).cumsum()
+        w = np.full(L, 2. / (L * (L + 1))).cumsum()
     return w
 
 
@@ -127,47 +122,42 @@ def gsl_div(original, model, weights='add-progressive',
     http://dx.doi.org/10.1016/j.ecosta.2017.01.006
     """
     all_ts = np.concatenate([original, model])
+
     # determine the time series length
     T = original.shape[1]
     if T < L:
-        raise ValueError('Word length cant be longer than timeseries')
+        raise ValueError("Word length can't be longer than timeseries")
+
     # symbolise time-series
     sym_ts = get_symbolised_ts(all_ts, b=b, L=L, min_per=min_per,
                                max_per=max_per, state_space=state_space)
+
+    # run over all word sizes
     raw_divergence = []
     correction = []
-    # run over all word sizes
     for n, ts in enumerate(sym_ts):
         # get frequency distributions for original and replicates
-        # could do it by applying a pd.value_counts to every column but this
-        # way you get a 10x speed up
-        fs = pd.DataFrame((ts.stack().reset_index()
-                           .groupby([0, "level_0"]).count() /
-                           len(ts.T)).unstack().values.astype(float))
+        ts_shape = ts.shape
+        uniq_values, ts = np.unique(ts, return_inverse=True)
+        ts = ts.reshape(ts_shape)
+        fs = np.float64([np.bincount(row, minlength=uniq_values.size) for row in ts]).T
+        fs /= fs.sum(axis=0)[None]
 
-        # replace NaN with 0 so that log does not complain later
-        fs = fs.replace(np.nan, 0)
         # determine the size of vocabulary for the right base in the log
-        base = b**(n+1)
-        # calculate the distances between the different time-series
-        # give a particluar word size
-        M = (fs.iloc[:, 1:].values +
-             np.expand_dims(fs.iloc[:, 0].values, 1)) / 2.
-        temp = (2 * sc.entropy(M, base=base) -
-                sc.entropy(fs.values[:, 1:], base=base))
-        raw_divergence.append(reduce(np.add, temp) /
-                              float((len(fs.columns) - 1)))
-        cardinality_of_m = fs.apply(lambda x: reduce(np.logical_or, x),
-                                    axis=1).sum()
-        # if there is only one replicate this has to be handled differently
-        if len(fs.columns) == 2:
-            cardinality_of_reps = fs.iloc[:, 1].apply(lambda x: x != 0).sum()
-        else:
-            cardinality_of_reps = fs.iloc[:, 1:].apply(
-                lambda x: reduce(np.logical_or, x), axis=1).sum()
+        log_base = b**(n+1)
+
+        # calculate the distances between the different time-series given a particular word size
+        M = 0.5 * (fs[:, 1:] + fs[:, 0:1])
+        temp = (2 * sc.entropy(M, base=log_base) - sc.entropy(fs[:, 1:], base=log_base))
+        raw_divergence.append(temp.mean())
+
         # calculate correction based on formula 9 line 2 in paper
-        correction.append(2*((cardinality_of_m - 1) / (4. * T)) -
-                          ((cardinality_of_reps - 1) / (2. * T)))
+        cardinality_of_m = fs.any(axis=1).sum()
+        cardinality_of_reps = fs[:, 1:].any(axis=1).sum()
+        correction.append(
+            2 * (cardinality_of_m - 1) / (4. * T)
+            - (cardinality_of_reps - 1) / (2. * T)
+        )
 
     w = get_weights(weight_type=weights, L=L)
     weighted_res = (w * np.array(raw_divergence)).sum(axis=0)
