@@ -8,9 +8,7 @@ created by Florian Roessler and Lies Boelen
 
 import click
 import numpy as np
-import pandas as pd
 import scipy.stats as sc
-from functools import reduce
 
 
 def get_symbolised_ts(ts, b, L, min_per=1, max_per=99, state_space=None):
@@ -193,8 +191,8 @@ def gsl_div(original, model, weights='add-progressive',
               help='State space boundaries. Format example: "(0, 1)"',
               show_default=True)
 def main(original, model, weights, b, l, min_per, max_per, state_space):
-    original_ts = pd.read_csv(original).values.T
-    model_ts = pd.read_csv(model).values.T
+    original_ts = np.loadtxt(original, delimiter=',', skiprows=1, ndmin=2, unpack=True)
+    model_ts = np.loadtxt(model, delimiter=',', skiprows=1, ndmin=2, unpack=True)
     res = gsl_div(original_ts, model_ts, weights=weights, b=b, L=l,
                   min_per=min_per, max_per=max_per,
                   state_space=eval(state_space))
